@@ -185,3 +185,58 @@ Arrête dès que `make test` passe, ou après 3 échecs sur la même cause.
 7. Seulement ensuite : baisser l'`effort` ou changer de modèle — c'est le seul
    levier qui échange de la qualité contre du coût, tous les précédents sont
    gratuits.
+
+---
+
+## 9. Découper les sessions
+
+Une session n'est pas le projet. Le projet vit sur le disque — code, `CLAUDE.md`,
+docs, fichiers d'état. La session n'est que la fenêtre de conversation. Changer
+de session ne fait perdre que le transcript, jamais le projet.
+
+D'où la seule question qui compte : **le savoir est-il dans les fichiers ou
+seulement dans la conversation ?** Dans les fichiers, couper est gratuit. Dans
+la conversation, couper fait mal — et la réponse n'est pas de rallonger la
+session, c'est d'écrire en continu.
+
+### La règle
+
+**Une frontière de session = une frontière de module.** Une session est
+livrable quand on peut écrire :
+
+1. ce qu'elle produit, en cinq lignes ;
+2. la **commande** qui prouve que c'est fini.
+
+Sans ces deux éléments, ce n'est pas une session, c'est encore un projet.
+
+Corollaire utile : un projet qui résiste au découpage en sessions est presque
+toujours un projet dont le code n'est pas découpé non plus. Le découpage de
+session est un révélateur d'architecture.
+
+### Le contrat d'abord
+
+Dans un projet à plusieurs entrées (plusieurs sources, plusieurs connecteurs,
+plusieurs formats), la première session fige le **schéma de données normalisé**,
+et celle-là ne se découpe pas. Tant qu'il n'est pas figé, aucune autre session
+n'est indépendante : chacune doit deviner ce que les autres produisent.
+
+Une fois le contrat figé, les modules se traitent en sessions séparées, chacune
+lisant le schéma et n'écrivant que son module, avec des fixtures en entrée. Une
+session n'a jamais besoin de savoir comment une autre a été écrite.
+
+### La reprise
+
+Chaque session se termine en touchant deux fichiers :
+
+- `.claude/state/<module>.md` — où ça en est, ce qui reste, les pièges
+  rencontrés ;
+- `ROADMAP.md` — statut des lots.
+
+La session suivante démarre sur « lis `.claude/state/` et `ROADMAP.md`, on
+attaque <module> ». Environ 2 ko de reprise au lieu de traîner un transcript
+entier, sans perte, parce que ce qui comptait a été écrit au fil de l'eau.
+
+### Quand ne pas couper
+
+Jamais au milieu d'un diagnostic en cours : le raisonnement qui a de la valeur
+n'est pas encore écrit. Terminer, écrire l'état, puis couper.
