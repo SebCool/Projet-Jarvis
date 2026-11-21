@@ -1,0 +1,7 @@
+description: >
+  Économie batterie sans perte fonctionnelle majeure : coupe les scans Wi-Fi/Bluetooth permanents
+  utilisés pour la géolocalisation (précision indoor un peu moindre) et la data mobile toujours active.
+settings:
+  - {namespace: global, key: wifi_scan_always_enabled, value: "0", why: "Scans Wi-Fi même Wi-Fi coupé (localisation)"}
+  - {namespace: global, key: ble_scan_always_enabled,  value: "0", why: "Scans Bluetooth LE même BT coupé (localisation)"}
+  - {namespace: global, key: mobile_data_always_on,    value: "0", why: "Data mobile maintenue active sur Wi-Fi (bascule plus lente, mais moins de conso)"}

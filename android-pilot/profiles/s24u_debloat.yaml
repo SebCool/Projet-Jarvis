@@ -1,0 +1,37 @@
+description: >
+  Débloat Samsung S24 Ultra (One UI). Désactivation pour l'utilisateur 0 uniquement, 100 % réversible
+  (rollback). Les packages absents du téléphone sont ignorés. risk low = sans effet de bord connu,
+  medium = perte d'une fonction précise (indiquée dans `why`).
+packages:
+  # --- Bixby -----------------------------------------------------------------
+  - {package: com.samsung.android.app.spage,          action: disable, risk: low,    why: "Samsung Free (écran à gauche de l'accueil)"}
+  - {package: com.samsung.android.bixby.wakeup,        action: disable, risk: low,    why: "Détection « Hi Bixby » (micro en continu)"}
+  - {package: com.samsung.android.bixby.agent,         action: disable, risk: medium, why: "Bixby Voice — la touche latérale ne lancera plus Bixby"}
+  - {package: com.samsung.android.app.settings.bixby,  action: disable, risk: medium, why: "Réglages Bixby"}
+  - {package: com.samsung.android.visionintelligence,  action: disable, risk: medium, why: "Bixby Vision (perte de la fonction dans l'appareil photo)"}
+  - {package: com.samsung.android.bixbyvision.framework, action: disable, risk: medium, why: "Framework Bixby Vision (traduction / reconnaissance caméra)"}
+  # --- Préinstallés tiers ----------------------------------------------------
+  - {package: com.facebook.appmanager,                 action: uninstall, risk: low,  why: "Facebook App Manager (préinstallé, mises à jour silencieuses)"}
+  - {package: com.facebook.services,                   action: uninstall, risk: low,  why: "Facebook Services"}
+  - {package: com.facebook.system,                     action: uninstall, risk: low,  why: "Facebook App Installer"}
+  - {package: com.facebook.katana,                     action: uninstall, risk: low,  why: "Facebook (si préinstallé et non utilisé)"}
+  - {package: com.netflix.partner.activation,          action: uninstall, risk: low,  why: "Activation partenaire Netflix"}
+  - {package: com.linkedin.android,                    action: uninstall, risk: low,  why: "LinkedIn préinstallé"}
+  - {package: com.microsoft.skydrive,                  action: disable,   risk: medium, why: "OneDrive — casse la synchro Galerie ↔ OneDrive"}
+  # --- Samsung peu utiles ----------------------------------------------------
+  - {package: com.samsung.android.app.tips,            action: disable, risk: low,    why: "Astuces Samsung"}
+  - {package: com.samsung.android.ardrawing,           action: disable, risk: low,    why: "AR Doodle"}
+  - {package: com.samsung.android.tvplus,              action: disable, risk: low,    why: "Samsung TV Plus"}
+  - {package: com.sec.android.app.kidshome,            action: disable, risk: low,    why: "Samsung Kids"}
+  - {package: com.samsung.android.kidsinstaller,       action: disable, risk: low,    why: "Installeur Samsung Kids"}
+  - {package: com.samsung.android.app.watchmanagerstub, action: disable, risk: low,   why: "Stub Galaxy Wearable (inutile sans montre Galaxy)"}
+  - {package: com.samsung.android.service.peoplestripe, action: disable, risk: low,   why: "Panneau Edge Contacts"}
+  - {package: com.samsung.android.svoiceime,           action: disable, risk: low,    why: "Saisie vocale Samsung (Google voice reste dispo)"}
+  - {package: com.samsung.android.aremoji,             action: disable, risk: medium, why: "AR Emoji (perte dans l'appareil photo)"}
+  - {package: com.samsung.android.game.gamehome,       action: disable, risk: medium, why: "Game Launcher — perte de Game Booster"}
+  - {package: com.samsung.android.rubin.app,           action: disable, risk: medium, why: "Customization Service (profilage d'usage) — suggestions intelligentes réduites"}
+  - {package: com.samsung.android.dqagent,             action: disable, risk: medium, why: "Device Quality Agent (télémétrie)"}
+  - {package: com.samsung.android.oneconnect,          action: disable, risk: medium, why: "SmartThings — à garder si utilisé (Quick Share / objets connectés)"}
+  # --- Google doublons -------------------------------------------------------
+  - {package: com.google.android.apps.tachyon,         action: disable, risk: low,    why: "Google Meet préinstallé"}
+  - {package: com.google.android.apps.youtube.music,   action: disable, risk: low,    why: "YouTube Music (si non utilisé)"}

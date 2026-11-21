@@ -1,0 +1,6 @@
+description: >
+  Réactivité perçue : animations système à 0.5x (deux fois plus rapides, pas d'impact batterie).
+settings:
+  - {namespace: global, key: window_animation_scale,     value: "0.5", why: "Animations fenêtres 0.5x"}
+  - {namespace: global, key: transition_animation_scale, value: "0.5", why: "Animations transitions 0.5x"}
+  - {namespace: global, key: animator_duration_scale,    value: "0.5", why: "Durée animateur 0.5x"}
