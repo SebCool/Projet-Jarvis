@@ -1,0 +1,63 @@
+description: >
+  Batterie par app : restreint l'arrière-plan (= « Restreinte » dans Batterie de l'app) et/ou place l'app
+  dans le bucket de veille « restricted » (jobs/alarmes très limités). Les apps absentes sont ignorées.
+  Effet : notifications push retardées voire perdues pour ces apps tant qu'elles ne sont pas ouvertes.
+  Complément dynamique : outil `battery_app_plan` (basé sur la conso réelle mesurée).
+
+# Jamais restreintes, même si elles consomment beaucoup (notifications / fonctions vitales).
+# Utilisé aussi par battery_app_plan. À adapter.
+keep:
+  - io.homeassistant.companion.android          # JARVIS : présence, capteurs, notifications HA
+  - io.homeassistant.companion.android.minimal
+  - com.whatsapp
+  - com.whatsapp.w4b
+  - org.thoughtcrime.securesms                  # Signal
+  - org.telegram.messenger
+  - com.discord
+  - com.google.android.gm                       # Gmail
+  - com.microsoft.office.outlook
+  - com.microsoft.teams
+  - com.azure.authenticator
+  - com.google.android.apps.authenticator2
+  - com.mcu.reolink                             # alertes caméras Reolink
+  - com.nordvpn.android
+  - com.google.android.apps.maps
+  - com.waze
+  - com.spotify.music                           # lecture en arrière-plan
+  - com.google.android.youtube                  # lecture en arrière-plan (Premium)
+  - com.samsung.android.app.watchmanager        # Galaxy Wearable (montre)
+  - com.sec.android.app.clockpackage            # alarmes
+
+# background: restrict | allow     bucket: restricted | rare | frequent | working_set | active
+apps:
+  # --- Réseaux sociaux (gros consommateurs en arrière-plan) --------------------
+  - {package: com.facebook.katana,       background: restrict, bucket: restricted, risk: low,    why: "Facebook : réveils/localisation en arrière-plan"}
+  - {package: com.facebook.orca,         background: restrict,                     risk: medium, why: "Messenger : messages reçus en retard"}
+  - {package: com.instagram.android,     background: restrict, bucket: rare,       risk: medium, why: "Instagram : notifications retardées"}
+  - {package: com.zhiliaoapp.musically,  background: restrict, bucket: restricted, risk: low,    why: "TikTok : préchargement vidéo en arrière-plan"}
+  - {package: com.ss.android.ugc.trill,  background: restrict, bucket: restricted, risk: low,    why: "TikTok (variante)"}
+  - {package: com.snapchat.android,      background: restrict, bucket: rare,       risk: medium, why: "Snapchat : snaps notifiés en retard"}
+  - {package: com.twitter.android,       background: restrict, bucket: restricted, risk: low,    why: "X / Twitter"}
+  - {package: com.linkedin.android,      background: restrict, bucket: restricted, risk: low,    why: "LinkedIn"}
+  - {package: com.pinterest,             background: restrict, bucket: restricted, risk: low,    why: "Pinterest"}
+  - {package: com.reddit.frontpage,      background: restrict, bucket: restricted, risk: low,    why: "Reddit"}
+  # --- Shopping / livraison ---------------------------------------------------
+  - {package: com.amazon.mShop.android.shopping, background: restrict, bucket: restricted, risk: low, why: "Amazon : suivi colis seulement à l'ouverture"}
+  - {package: com.alibaba.aliexpresshd,  background: restrict, bucket: restricted, risk: low,    why: "AliExpress"}
+  - {package: com.einnovation.temu,      background: restrict, bucket: restricted, risk: low,    why: "Temu (très agressif en arrière-plan)"}
+  - {package: com.zzkko,                 background: restrict, bucket: restricted, risk: low,    why: "Shein"}
+  - {package: fr.vinted,                 background: restrict, bucket: rare,       risk: medium, why: "Vinted : messages acheteurs retardés"}
+  - {package: fr.leboncoin,              background: restrict, bucket: rare,       risk: medium, why: "Leboncoin : messages retardés"}
+  - {package: com.ubercab.eats,          background: restrict, bucket: restricted, risk: low,    why: "Uber Eats (le suivi marche app ouverte)"}
+  - {package: com.deliveroo.orderapp,    background: restrict, bucket: restricted, risk: low,    why: "Deliveroo"}
+  - {package: com.mcdo.mcdonalds,        background: restrict, bucket: restricted, risk: low,    why: "McDonald's"}
+  # --- Streaming (inutile en arrière-plan hors téléchargements) ---------------
+  - {package: com.netflix.mediaclient,   background: restrict, bucket: restricted, risk: low,    why: "Netflix : bloque les téléchargements auto en arrière-plan"}
+  - {package: com.disney.disneyplus,     background: restrict, bucket: restricted, risk: low,    why: "Disney+"}
+  - {package: com.amazon.avod.thirdpartyclient, background: restrict, bucket: restricted, risk: low, why: "Prime Video"}
+  # --- Samsung non essentiels -------------------------------------------------
+  - {package: com.samsung.android.voc,   background: restrict, bucket: restricted, risk: low,    why: "Samsung Members"}
+  - {package: com.samsung.sree,          background: restrict, bucket: restricted, risk: low,    why: "Samsung Global Goals"}
+  - {package: com.samsung.ecomm.global,  background: restrict, bucket: restricted, risk: low,    why: "Samsung Shop"}
+  - {package: com.samsung.android.tvplus, background: restrict, bucket: restricted, risk: low,   why: "Samsung TV Plus"}
+  - {package: com.samsung.android.game.gamehome, bucket: rare,                    risk: low,    why: "Game Launcher : moins de réveils (Game Booster conservé)"}

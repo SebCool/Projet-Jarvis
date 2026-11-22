@@ -1,6 +1,6 @@
 [project]
 name = "android-pilot"
-version = "0.1.0"
+version = "0.2.0"
 description = "Serveur MCP pour piloter et optimiser un Samsung Galaxy S24 Ultra via ADB (sans root)"
 requires-python = ">=3.10"
 dependencies = ["mcp>=1.2", "pyyaml>=6", "pillow>=10"]
@@ -19,5 +19,5 @@ build-backend = "setuptools.build_meta"
 where = ["src"]
 
 [tool.pytest.ini_options]
-pythonpath = ["src"]
+pythonpath = ["src", "tests"]
 testpaths = ["tests"]

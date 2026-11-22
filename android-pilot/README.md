@@ -19,6 +19,7 @@ Claude Desktop / Claude Code (PC W11 .126)
 |---|---|---|
 | Diagnostic | `device_info`, `battery_report`, `list_packages`, `package_info`, `settings_get/list`, `shell_readonly` | lecture seule |
 | Apps | `package_set_state` (enabled / disabled / uninstalled), `restrict_background` | ✅ |
+| Batterie par app | `battery_report`, `battery_app_plan` (dynamique), `set_standby_bucket`, `set_doze_exempt` | ✅ |
 | Réglages | `settings_put`, `set_animation_scale` | ✅ |
 | Profils | `list_profiles`, `apply_profile` (dry-run par défaut, filtre de risque) | ✅ |
 | Historique | `journal_list`, `rollback`, `rollback_all`, `snapshot` | — |
@@ -87,6 +88,23 @@ Redémarrer Claude Desktop, puis demander : *« fais un device_info de mon tél�
 | `ANDROID_PILOT_ADB` | chemin de `adb` | `adb` du PATH |
 | `ANDROID_PILOT_SERIAL` | appareil ciblé (`IP:port`) | auto si un seul appareil |
 | `ANDROID_PILOT_HOME` | journal + snapshots | `~/.android-pilot` |
+
+## Batterie par app — deux approches complémentaires
+1. **Profil statique `s24u_battery_apps`** : liste d'apps connues pour être gourmandes (réseaux sociaux, shopping,
+   streaming, Samsung non essentiels) → restriction arrière-plan + bucket de veille. Seules les apps installées sont touchées.
+2. **Plan dynamique `battery_app_plan`** : part de la **conso réellement mesurée** depuis la dernière charge complète
+   (`dumpsys batterystats`), ne cible que les apps tierces, et décide selon la part arrière-plan :
+   - `bg_share ≥ 0.4` → restriction arrière-plan ; `≥ 0.7` → bucket `restricted`, sinon `rare` ;
+   - app exclue de l'optimisation batterie par l'utilisateur → réintégrée dans Doze ;
+   - conso surtout en **service premier plan** (musique, GPS, appel) → **ignorée** (sinon on la casse).
+
+Les deux respectent la liste **`keep`** (dans `profiles/s24u_battery_apps.yaml`) : Home Assistant Companion (JARVIS),
+messageries, mail, authentificateurs, Reolink, VPN, GPS, musique, montre, alarmes. **À adapter à tes apps.**
+
+Annulation : `rollback_all(note_contains="battery_plan")` ou `rollback_all(note_contains="profil:s24u_battery_apps")`.
+
+⚠️ Effet de bord assumé : les notifications des apps restreintes arrivent en retard (ou à l'ouverture de l'app).
+Le plan dynamique est fiable après une **journée d'usage normal depuis une charge complète**.
 
 ## Exemples de demandes
 - « Analyse ce qui vide ma batterie depuis la dernière charge et propose des actions. »

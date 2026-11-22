@@ -20,6 +20,48 @@ PROFILES_DIR = Path(__file__).resolve().parents[2] / "profiles"
 
 PackageState = str  # enabled | disabled | uninstalled
 
+# am get-standby-bucket → nom. Seuls les SETTABLE peuvent être imposés via `am set-standby-bucket`.
+BUCKET_NAMES = {5: "exempted", 10: "active", 20: "working_set", 30: "frequent", 40: "rare", 45: "restricted", 50: "never"}
+SETTABLE_BUCKETS = ("active", "working_set", "frequent", "rare", "restricted")
+
+
+def parse_power_use(stats: str, uid_map: dict[int, list[str]]) -> dict[str, Any]:
+    """Parse la section « Estimated power use (mAh) » de `dumpsys batterystats --charged`.
+
+    Formats gérés :
+      Android ≤ 11 : `    Uid u0a123: 45.6 ( cpu=… )`
+      Android ≥ 12 : `    UID u0a123: 45.6 fg: 10.2 bg: 30.1 fgs: 5.3 cached: 0.0 ( cpu=… )`
+    """
+    m = re.search(r"Estimated power use \(mAh\):\n(.*?)(?=\n {0,2}\S|\Z)", stats, re.S)
+    section = m.group(1) if m else ""
+    cap = re.search(r"Capacity: ([\d.]+)", section)
+    drain = re.search(r"Computed drain: ([\d.]+)", section)
+    apps = []
+    for line in section.splitlines():
+        mm = re.match(r"\s*U[iI][dD] (u(\d+)a(\d+)|\d+): ([\d.]+)(.*)", line)
+        if not mm:
+            continue
+        if mm.group(3) is not None:
+            uid = int(mm.group(2)) * 100000 + 10000 + int(mm.group(3))
+        else:
+            uid = int(mm.group(1))
+        rest = mm.group(5)
+        bg = re.search(r"\bbg: ([\d.]+)", rest)
+        fgs = re.search(r"\bfgs: ([\d.]+)", rest)
+        apps.append({
+            "uid": uid,
+            "packages": uid_map.get(uid % 100000, []),
+            "mah": float(mm.group(4)),
+            "bg_mah": float(bg.group(1)) if bg else None,      # arrière-plan pur (restreignable)
+            "fgs_mah": float(fgs.group(1)) if fgs else None,   # service premier plan (musique, GPS…) : ne pas couper
+        })
+    apps.sort(key=lambda a: a["mah"], reverse=True)
+    return {
+        "capacity": float(cap.group(1)) if cap else None,
+        "computed_drain": float(drain.group(1)) if drain else None,
+        "apps": apps,
+    }
+
 
 class Pilot:
     def __init__(self, adb: Adb | None = None, journal: Journal | None = None):
@@ -81,32 +123,119 @@ class Pilot:
             "lastUpdateTime": grab("lastUpdateTime"),
             "system_app": "SYSTEM" in (grab("pkgFlags") or "") or "flags=[ SYSTEM" in dump,
             "background": self._appop_get(package, "RUN_ANY_IN_BACKGROUND"),
-            "standby_bucket": self.adb.shell("am", "get-standby-bucket", package, check=False),
+            "standby_bucket": self.standby_bucket_get(package),
+            "doze_user_exempt": package in self.doze_user_exempt(),
         }
 
-    def battery_report(self) -> dict[str, Any]:
+    def power_use(self) -> dict[str, Any]:
+        """Conso par app (mAh) depuis la dernière charge complète, triée, avec part arrière-plan."""
         stats = self.adb.shell("dumpsys", "batterystats", "--charged", check=False, timeout=90)
-        # Section "Estimated power use (mAh)" : top consommateurs depuis la dernière charge complète
-        top: list[str] = []
-        m = re.search(r"Estimated power use \(mAh\):(.*?)(?:\n\s*\n)", stats, re.S)
-        if m:
-            top = [l.strip() for l in m.group(1).splitlines() if l.strip()][:25]
-        uid_map = {}
+        return parse_power_use(stats, self._uid_map())
+
+    def _uid_map(self) -> dict[int, list[str]]:
+        out: dict[int, list[str]] = {}
         for line in self.adb.shell("cmd", "package", "list", "packages", "-U", check=False).splitlines():
             if mm := re.match(r"package:(\S+) uid:(\d+)", line):
-                uid_map[mm.group(2)] = mm.group(1)
+                out.setdefault(int(mm.group(2)), []).append(mm.group(1))
+        return out
 
-        def resolve(line: str) -> str:
-            mm = re.search(r"UID u0a(\d+)", line)
-            if mm:
-                uid = str(10000 + int(mm.group(1)))
-                return f"{line}  → {uid_map.get(uid, '?')}"
-            return line
-
+    def battery_report(self, top_n: int = 20) -> dict[str, Any]:
+        pu = self.power_use()
         return {
-            "top_consumers_since_full_charge": [resolve(l) for l in top],
-            "deviceidle_whitelist": self.adb.shell("cmd", "deviceidle", "whitelist", check=False).splitlines()[:60],
+            "capacity_mAh": pu["capacity"],
+            "computed_drain_mAh": pu["computed_drain"],
+            "top_apps": pu["apps"][:top_n],
+            "doze_user_exempt": self.doze_user_exempt(),
         }
+
+    # ------------------------------------------------- veille / Doze
+    def standby_bucket_get(self, package: str) -> str:
+        raw = self.adb.shell("am", "get-standby-bucket", package, check=False).strip()
+        return BUCKET_NAMES.get(int(raw), raw) if raw.isdigit() else raw
+
+    def set_standby_bucket(self, package: str, bucket: str, note: str = "") -> dict[str, Any]:
+        check_package(package)
+        if bucket not in SETTABLE_BUCKETS:
+            raise ValueError(f"bucket ∈ {SETTABLE_BUCKETS}")
+        before = self.standby_bucket_get(package)
+        if before not in SETTABLE_BUCKETS:
+            raise PermissionError(f"{package} est en bucket '{before}' (géré par le système) : non modifiable.")
+        if before == bucket:
+            return {"package": package, "bucket": bucket, "changed": False}
+        self.adb.shell("am", "set-standby-bucket", package, bucket)
+        undo = [["am", "set-standby-bucket", package, before]]
+        ch = self.journal.add(Change("standby", package, before, bucket, undo, note))
+        return {"package": package, "before": before, "after": bucket, "change_id": ch.id}
+
+    def doze_user_exempt(self) -> list[str]:
+        """Apps que l'UTILISATEUR a exclues de l'optimisation batterie (« Non restreinte »)."""
+        out = self.adb.shell("cmd", "deviceidle", "whitelist", check=False)
+        return sorted({l.split(",")[1] for l in out.splitlines() if l.startswith("user,")})
+
+    def set_doze_exempt(self, package: str, exempt: bool, note: str = "") -> dict[str, Any]:
+        check_package(package)
+        before = package in self.doze_user_exempt()
+        if before == exempt:
+            return {"package": package, "doze_exempt": exempt, "changed": False}
+        self.adb.shell("cmd", "deviceidle", "whitelist", ("+" if exempt else "-") + package)
+        undo = [["cmd", "deviceidle", "whitelist", ("-" if exempt else "+") + package]]
+        ch = self.journal.add(Change("doze", package, str(before), str(exempt), undo, note))
+        return {"package": package, "before": before, "after": exempt, "change_id": ch.id}
+
+    # ------------------------------------------------- plan batterie dynamique
+    def battery_app_plan(self, top_n: int = 15, min_mah: float = 20.0, min_bg_share: float = 0.4,
+                         dry_run: bool = True) -> dict[str, Any]:
+        """Propose (et applique si dry_run=False) des restrictions pour les apps tierces qui consomment le plus,
+        surtout en arrière-plan. Respecte la liste `keep` de s24u_battery_apps.yaml."""
+        keep = set(self._load_profile("s24u_battery_apps").get("keep", []))
+        third_party = self.adb._list("-3")
+        doze_exempt = set(self.doze_user_exempt())
+        pu = self.power_use()
+        plan, ignored = [], []
+        for app in pu["apps"]:
+            pkgs = [p for p in app["packages"] if p in third_party]
+            if not pkgs or app["mah"] < min_mah:
+                continue
+            pkg = pkgs[0]
+            if pkg in keep:
+                ignored.append({"package": pkg, "mah": app["mah"], "reason": "liste keep"})
+                continue
+            if app.get("fgs_mah") and app["fgs_mah"] / app["mah"] > 0.5:
+                ignored.append({"package": pkg, "mah": app["mah"], "reason": "conso surtout en service premier plan (musique/GPS/appel) : restreindre la casserait"})
+                continue
+            bg_share = (app["bg_mah"] / app["mah"]) if app.get("bg_mah") is not None and app["mah"] else None
+            actions = []
+            if self._appop_get(pkg, "RUN_ANY_IN_BACKGROUND") != "ignore" and (bg_share is None or bg_share >= min_bg_share):
+                actions.append({"op": "background", "to": "restrict"})
+            if self.standby_bucket_get(pkg) in ("active", "working_set", "frequent"):
+                actions.append({"op": "bucket", "to": "rare" if (bg_share or 0) < 0.7 else "restricted"})
+            if pkg in doze_exempt:
+                actions.append({"op": "doze", "to": "optimize"})
+            if actions:
+                plan.append({"package": pkg, "mah": app["mah"], "bg_mah": app.get("bg_mah"),
+                             "bg_share": None if bg_share is None else round(bg_share, 2), "actions": actions})
+            if len(plan) >= top_n:
+                break
+        result = {"since_full_charge_mAh": pu["computed_drain"], "plan": plan, "ignored": ignored,
+                  "note": "bg_share = part de la conso en arrière-plan ; < min_bg_share → app surtout utilisée écran allumé, on ne restreint pas l'arrière-plan."}
+        if dry_run:
+            return {"dry_run": True, **result}
+        result["results"] = [self._apply_app_actions(p["package"], p["actions"], "battery_plan") for p in plan]
+        return {"dry_run": False, **result}
+
+    def _apply_app_actions(self, pkg: str, actions: list[dict[str, str]], note: str) -> list[dict[str, Any]]:
+        out = []
+        for a in actions:
+            try:
+                if a["op"] == "background":
+                    out.append(self.restrict_background(pkg, a["to"] == "restrict", note))
+                elif a["op"] == "bucket":
+                    out.append(self.set_standby_bucket(pkg, a["to"], note))
+                elif a["op"] == "doze":
+                    out.append(self.set_doze_exempt(pkg, a["to"] != "optimize", note))
+            except Exception as e:
+                out.append({"package": pkg, "action": a, "error": str(e)})
+        return out
 
     def settings_list(self, namespace: str, contains: str = "") -> list[str]:
         check_setting(namespace, "x")
@@ -168,11 +297,16 @@ class Pilot:
             for p in sorted(PROFILES_DIR.glob("*.yaml"))
         ]
 
-    def apply_profile(self, name: str, dry_run: bool = True, max_risk: str = "low") -> dict[str, Any]:
+    def _load_profile(self, name: str) -> dict[str, Any]:
+        if not re.fullmatch(r"[a-z0-9_]+", name):
+            raise ValueError(f"Nom de profil invalide : {name}")
         path = PROFILES_DIR / f"{name}.yaml"
-        if not path.exists() or path.parent != PROFILES_DIR:
+        if not path.exists():
             raise ValueError(f"Profil inconnu : {name}")
-        prof = yaml.safe_load(path.read_text(encoding="utf-8"))
+        return yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+
+    def apply_profile(self, name: str, dry_run: bool = True, max_risk: str = "low") -> dict[str, Any]:
+        prof = self._load_profile(name)
         levels = {"low": 0, "medium": 1, "high": 2}
         cap = levels[max_risk]
         plan, results, skipped = [], [], []
@@ -190,6 +324,26 @@ class Pilot:
             if cur != str(item["value"]):
                 plan.append({"type": "setting", "setting": f"{item['namespace']}/{item['key']}", "from": cur,
                              "to": str(item["value"]), "why": item.get("why", "")})
+        keep = set(prof.get("keep", []))
+        installed = self.adb._list() if prof.get("apps") else set()
+        for item in prof.get("apps", []):
+            pkg = item["package"]
+            if pkg not in installed or pkg in keep:
+                continue
+            if levels.get(item.get("risk", "high"), 2) > cap:
+                skipped.append({**item, "reason": f"risque {item.get('risk')} > {max_risk}"})
+                continue
+            actions = []
+            if "background" in item:
+                cur = self._appop_get(pkg, "RUN_ANY_IN_BACKGROUND")
+                if (cur == "ignore") != (item["background"] == "restrict"):
+                    actions.append({"op": "background", "from": cur, "to": item["background"]})
+            if "bucket" in item:
+                cur = self.standby_bucket_get(pkg)
+                if cur != item["bucket"] and cur in SETTABLE_BUCKETS:
+                    actions.append({"op": "bucket", "from": cur, "to": item["bucket"]})
+            if actions:
+                plan.append({"type": "app", "package": pkg, "actions": actions, "why": item.get("why", "")})
         if dry_run:
             return {"profile": name, "dry_run": True, "plan": plan, "skipped_by_risk": skipped}
         note = f"profil:{name}"
@@ -197,6 +351,8 @@ class Pilot:
             try:
                 if step["type"] == "package":
                     results.append(self.set_package_state(step["package"], step["to"], note))
+                elif step["type"] == "app":
+                    results.extend(self._apply_app_actions(step["package"], step["actions"], note))
                 else:
                     ns, key = step["setting"].split("/", 1)
                     results.append(self.settings_put(ns, key, step["to"], note))

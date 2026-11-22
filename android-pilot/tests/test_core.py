@@ -19,9 +19,16 @@ class FakeAdb:
                      "com.android.systemui": "enabled"}
         self.settings = {("global", "window_animation_scale"): "1.0"}
         self.appops = {}
+        self.buckets = {}
+        self.doze_user = set()
+        self.third_party = {"com.facebook.system"}
+        self.batterystats = ""
+        self.uids = {}
         self.calls = []
 
     def _list(self, *flags):
+        if "-3" in flags:
+            return {p for p in self.third_party if self.pkgs.get(p) not in (None, "uninstalled")}
         if "-u" in flags:
             return set(self.pkgs)
         live = {p for p, s in self.pkgs.items() if s != "uninstalled"}
@@ -61,6 +68,20 @@ class FakeAdb:
             self.settings.pop((a[2], a[3]), None)
         elif a[:3] == ["cmd", "appops", "set"]:
             self.appops[(a[3], a[4])] = a[5]
+        elif a[:2] == ["am", "get-standby-bucket"]:
+            return str(self.buckets.get(a[2], 10))
+        elif a[:2] == ["am", "set-standby-bucket"]:
+            names = {"active": 10, "working_set": 20, "frequent": 30, "rare": 40, "restricted": 45}
+            self.buckets[a[2]] = names[a[3]]
+        elif a[:3] == ["cmd", "deviceidle", "whitelist"]:
+            if len(a) == 4:
+                (self.doze_user.add if a[3][0] == "+" else self.doze_user.discard)(a[3][1:])
+                return ""
+            return "\n".join(["system,com.google.android.gms,10150"] + [f"user,{p},10999" for p in self.doze_user])
+        elif a[:2] == ["dumpsys", "batterystats"]:
+            return self.batterystats
+        elif a[:4] == ["cmd", "package", "list", "packages"]:
+            return "\n".join(f"package:{p} uid:{u}" for p, u in self.uids.items())
         elif a[:3] == ["cmd", "appops", "get"]:
             v = self.appops.get((a[3], a[4]))
             return f"{a[4]}: {v}; time=+1d" if v and v != "default" else "No operations."

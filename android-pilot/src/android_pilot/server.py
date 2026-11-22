@@ -114,9 +114,10 @@ def package_info(package: str) -> str:
 
 
 @mcp.tool(annotations=RO)
-def battery_report() -> str:
-    """Top consommateurs batterie depuis la dernière charge complète + liste blanche Doze."""
-    return _j(pilot.battery_report())
+def battery_report(top_n: int = 20) -> str:
+    """Conso par app (mAh, part arrière-plan `bg_mah`, service premier plan `fgs_mah`) depuis la dernière
+    charge complète + apps exclues de l'optimisation batterie par l'utilisateur."""
+    return _j(pilot.battery_report(top_n))
 
 
 @mcp.tool(annotations=RO)
@@ -162,6 +163,29 @@ def set_animation_scale(scale: float, reason: str = "") -> str:
 def restrict_background(package: str, restrict: bool = True, reason: str = "") -> str:
     """Empêche (ou ré-autorise) une app de tourner en arrière-plan (appop RUN_ANY_IN_BACKGROUND). Journalisé."""
     return _j(pilot.restrict_background(package, restrict, reason))
+
+
+@mcp.tool(annotations=RW)
+def set_standby_bucket(package: str, bucket: str, reason: str = "") -> str:
+    """Bucket de veille d'une app : active | working_set | frequent | rare | restricted.
+    rare/restricted = jobs, alarmes et réseau en arrière-plan fortement limités. Journalisé.
+    Note : Android peut remonter le bucket quand l'utilisateur rouvre l'app."""
+    return _j(pilot.set_standby_bucket(package, bucket, reason))
+
+
+@mcp.tool(annotations=RW)
+def set_doze_exempt(package: str, exempt: bool, reason: str = "") -> str:
+    """Ajoute (exempt=True) ou retire une app de la liste « Non optimisée » (exemption Doze). Journalisé."""
+    return _j(pilot.set_doze_exempt(package, exempt, reason))
+
+
+@mcp.tool(annotations=RW)
+def battery_app_plan(top_n: int = 15, min_mah: float = 20.0, min_bg_share: float = 0.4, dry_run: bool = True) -> str:
+    """Plan batterie DYNAMIQUE basé sur la conso réelle : pour les apps tierces les plus gourmandes
+    (hors liste keep, hors apps à service premier plan), propose restriction arrière-plan, bucket de veille
+    et retrait de l'exemption Doze. TOUJOURS dry_run=True d'abord, montrer le plan, puis dry_run=False.
+    Toutes les actions sont annulables : rollback_all(note_contains='battery_plan')."""
+    return _j(pilot.battery_app_plan(top_n, min_mah, min_bg_share, dry_run))
 
 
 @mcp.tool(annotations=RO)

@@ -117,6 +117,7 @@ READONLY_COMMANDS: dict[str, tuple[str, ...] | None] = {
     "cmd": ("package", "deviceidle", "appops"),
     "settings": ("get", "list"),
     "appops": ("get",),
+    "am": ("get-standby-bucket", "get-inactive"),
     "logcat": None,       # forcé en -d (dump) plus bas
 }
 
