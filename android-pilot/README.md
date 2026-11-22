@@ -41,7 +41,16 @@ Claude Desktop / Claude Code (PC W11 .126)
 3. **Options de développement › Débogage sans fil → ON** (sur le Wi-Fi maison).
 4. Donner au téléphone une **IP fixe** (bail DHCP statique sur la box).
 
-### 2. PC Windows (.126)
+### 2. PC Windows — installation automatique (recommandé)
+```powershell
+New-Item -ItemType Directory -Force D:\AndroidPilot | Out-Null; cd D:\AndroidPilot
+git clone --filter=blob:none --sparse --branch ccr-355f178b-z54gah https://github.com/SebCool/Projet-Jarvis.git
+cd Projet-Jarvis; git sparse-checkout set android-pilot; cd android-pilot
+powershell -ExecutionPolicy Bypass -File scripts\setup_windows.ps1
+```
+Le script installe Python/adb si absents, crée le venv, lance les tests et écrit `.mcp.json` pour Claude Code.
+
+### 2bis. PC Windows — installation manuelle
 ```powershell
 # platform-tools Google
 winget install Google.PlatformTools        # ou zip : https://developer.android.com/tools/releases/platform-tools
